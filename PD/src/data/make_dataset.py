@@ -1,7 +1,6 @@
 import pandas as pd
-import pandas_profiling
 
-if __name__ == '__main__':
+def make_dataset():
     print("make_dataset started")
     #  The features of Acquisition file
     col_acq = ['LoanID', 'Channel', 'SellerName', 'OrInterestRate', 'OrUnpaidPrinc', 'OrLoanTerm',
@@ -40,10 +39,10 @@ if __name__ == '__main__':
     # print(performance_frame.shape)
 
     # Merge the two DF's together using inner join
-    merged_frame = pd.merge(aquisition_frame, performance_frame, on='LoanID', how='inner')
+    df = pd.merge(aquisition_frame, performance_frame, on='LoanID', how='inner')
     # merged_frame.rename(index=str, columns={'ForeclosureDate': 'Default'}, inplace=True)
 
-    profile = pandas_profiling.ProfileReport(merged_frame)
-    profile.to_file(outputfile="report.html")
 
     # export_csv = merged_frame.to_csv('C:/Users/bebxadvberb/PycharmProjects/ML4Credit/POC PD modelling/merged_df.csv')
+
+    return df
