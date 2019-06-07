@@ -1,6 +1,7 @@
 # Import pandas
 import pandas as pd
-import pandas_profiling
+# import pandas_profiling
+from catboost import CatBoostClassifier, Pool
 
 
 def makeDateNumeric(text):
@@ -20,7 +21,7 @@ def makeDayNumeric(text):
 def build_features(df):
     # Define the DEFAULT FLAG
     # df.rename(index=str, columns={'ForeclosureDate': 'Default'}, inplace= True)
-    # df['Default'].fillna(0, inplace=True)
+    # df['ForeclosureDate'].fillna(0, inplace=True)
     # df.loc[df['Default'] != 0, 'Default'] = 1
     # print(df['Default'].head())
     # df['Default'] = df['Default'].astype('category')
@@ -28,18 +29,27 @@ def build_features(df):
     # pd.to_numeric(df['Default'], errors='coerce')
 
     # REMOVE CONSTANT FEATURES (see profile-report)
-    df = df.drop(['ProductType', 'ServicingIndicator'], axis=1)
+    df = df.drop(['ProductType', 'ServicingIndicator'], axis=1) # Constant features
 
-    # REMOVE FEATURES WITH MORE THAN 90% MISSING VALUES
+    df = df.drop(['OrUnpaidPrinc'], axis=1) # high correlation
+
+    df = df.drop(['MHRC', 'RPMWP', 'PPRC', 'RMWPF', 'OFP'], axis=1) # too much missing values
+
+    df = df.drop(['DTIRat', 'CreditScore', 'MortInsPerc', 'CoCreditScore', 'MortInsType', 'CAUPB', 'AdMonthsToMaturity', 'CLDS', 'NetSaleProceeds', 'NIBUPB', 'PFUPB'], axis=1) # still missing values
+
+    df = df.drop(['ATFHP', 'AssetRecCost'], axis=1) # delete
+
+    df = df.drop(['ZeroBalCode', 'ZeroBalDate'], axis=1) # to discuss with Risk Team
+
+    df = df.drop(['CreditEnhProceeds', 'Servicer',  'DispositionDate', 'LastInstallDate', 'FPWA'], axis=1) # not sure what to do yet
+
+
 
     # GET DATA WITH ONLY NUMERICAL FEATURES
     num_feat = df.select_dtypes(include=['int32', 'int64', 'float64']).columns
 
     # CATEGORICAL FEATURES
     obj_feat = df.select_dtypes(include='object').columns
-
-    cat_feat = ['Channel', 'SellerName', 'FTHomeBuyer', 'LoanPurpose', 'PropertyType', 'OccStatus', 'PropertyState',
-                'ProductType', 'RelMortInd', 'ModFlag']
 
     # TRANSFORM DATES TO NUMBER OF MONTHS (STARTING FROM 01/2000)
     df['MonthRep'] = df['MonthRep'].apply(makeDayNumeric)
@@ -58,25 +68,24 @@ def build_features(df):
     # y = df[['Default']]
     # X = df.drop(['Default'], axis=1)
 
-    # return X
+    return df
 
 
-if __name__ == '__main__':
+def make_dataset():
+    #  The features of Acquisition file
+    col_acq = ['LoanID', 'Channel', 'SellerName', 'OrInterestRate', 'OrUnpaidPrinc', 'OrLoanTerm',
+               'OrDate', 'FirstPayment', 'OrLTV', 'OrCLTV', 'NumBorrow', 'DTIRat', 'CreditScore',
+               'FTHomeBuyer', 'LoanPurpose', 'PropertyType', 'NumUnits', 'OccStatus', 'PropertyState',
+               'Zip', 'MortInsPerc', 'ProductType', 'CoCreditScore', 'MortInsType', 'RelMortInd']
 
-    #  The features of Table Acquisition
-    col_acq = ['LoanID','Channel','SellerName','OrInterestRate','OrUnpaidPrinc','OrLoanTerm',
-                'OrDate','FirstPayment','OrLTV','OrCLTV','NumBorrow','DTIRat','CreditScore',
-                'FTHomeBuyer','LoanPurpose','PropertyType','NumUnits','OccStatus','PropertyState',
-                'Zip','MortInsPerc','ProductType','CoCreditScore','MortInsType','RelMortInd']
+    #  The features of Performance file
+    col_per = ['LoanID', 'MonthRep', 'Servicer', 'CurrInterestRate', 'CAUPB', 'LoanAge', 'MonthsToMaturity',
+               'AdMonthsToMaturity', 'MaturityDate', 'MSA', 'CLDS', 'ModFlag', 'ZeroBalCode', 'ZeroBalDate',
+               'LastInstallDate', 'ForeclosureDate', 'DispositionDate', 'PPRC', 'AssetRecCost', 'MHRC',
+               'ATFHP', 'NetSaleProceeds', 'CreditEnhProceeds', 'RPMWP', 'OFP', 'NIBUPB', 'PFUPB', 'RMWPF',
+               'FPWA', 'ServicingIndicator']
 
-    #  The features of Table Performance
-    col_per = ['LoanID','MonthRep','Servicer','CurrInterestRate','CAUPB','LoanAge','MonthsToMaturity',
-                  'AdMonthsToMaturity','MaturityDate','MSA','CLDS','ModFlag','ZeroBalCode','ZeroBalDate',
-                  'LastInstallDate','ForeclosureDate','DispositionDate','PPRC','AssetRecCost','MHRC',
-                  'ATFHP','NetSaleProceeds','CreditEnhProceeds','RPMWP','OFP','NIBUPB','PFUPB','RMWPF',
-                  'FPWA','ServicingIndicator']
-
-    linesToRead = 1000000
+    linesToRead = 30000
 
     aquisition_frame = pd.read_csv('C:/Users/bebxadvberb/Documents/AI/Trusted AI/Acquisition_2007Q4.txt', sep='|', names=col_acq, nrows= linesToRead)
     performance_frame = pd.read_csv('C:/Users/bebxadvberb/Documents/AI/Trusted AI/Performance_2007Q4.txt', sep='|', names=col_per, index_col=False, nrows = linesToRead)
@@ -86,16 +95,38 @@ if __name__ == '__main__':
     # Merge the two DF's together using inner join
     df = pd.merge(aquisition_frame, performance_frame, on = 'LoanID', how='inner')
 
-    profile = pandas_profiling.ProfileReport(df)
-    profile.to_file(outputfile="report.html")
-    print("1")
+    return df
 
 
-    build_features(df)
-    print("2")
 
-    print(df.dtypes)
+def model_catboost(df):
 
-    profile = pandas_profiling.ProfileReport(df)
-    profile.to_file(outputfile="report2.html")
-    print("3")
+    cat_features = ['Channel', 'SellerName', 'FTHomeBuyer', 'LoanPurpose', 'PropertyType', 'OccStatus', 'PropertyState',
+                    'RelMortInd', 'ModFlag']
+
+    indices = [df.columns.get_loc(c) for c in cat_features]
+    indicesFull = indices.append(df.columns.size)
+    print(indicesFull)
+
+    train_data = df.drop(['ForeclosureDate'], axis=1)
+
+    train_labels = df[['ForeclosureDate']]
+
+    train_pool = Pool(data=train_data, label=train_labels, cat_features=indicesFull)
+    test_pool = Pool(data=train_data, cat_features=indices)
+
+    model = CatBoostClassifier(iterations=20, 
+                            loss_function = "CrossEntropy", 
+                            train_dir = "crossentropy")
+
+    model.fit(train_pool)
+    predictions = model.predict(test_pool)
+
+    res = train_labels.concat(predictions)
+    print(res.head())
+
+
+if __name__ == '__main__':
+    df = make_dataset()
+    df = build_features(df)
+    # model_catboost(df)
