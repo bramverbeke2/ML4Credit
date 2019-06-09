@@ -20,9 +20,9 @@ def makeDayNumeric(text):
 
 def build_features(df):
     # Define the DEFAULT FLAG
-    # df.rename(index=str, columns={'ForeclosureDate': 'Default'}, inplace= True)
-    # df['ForeclosureDate'].fillna(0, inplace=True)
-    # df.loc[df['Default'] != 0, 'Default'] = 1
+    df.rename(index=str, columns={'ForeclosureDate': 'Default'}, inplace= True)
+    df['Default'].fillna(0, inplace=True)
+    df.loc[df['Default'] != 0, 'Default'] = 1
     # print(df['Default'].head())
     # df['Default'] = df['Default'].astype('category')
 
@@ -62,16 +62,15 @@ def build_features(df):
     pd.to_numeric(df['FirstPayment'], errors='coerce')
     pd.to_numeric(df['MaturityDate'], errors='coerce')
 
-    print(df.head())
+    
 
-    # SPLIT INPUT AND TARGET VARIABLES
-    # y = df[['Default']]
-    # X = df.drop(['Default'], axis=1)
+    df = df.drop(obj_feat, axis=1)
+    print(df.head())
 
     return df
 
 
-def make_dataset():
+def make_dataset(linesToRead):
     #  The features of Acquisition file
     col_acq = ['LoanID', 'Channel', 'SellerName', 'OrInterestRate', 'OrUnpaidPrinc', 'OrLoanTerm',
                'OrDate', 'FirstPayment', 'OrLTV', 'OrCLTV', 'NumBorrow', 'DTIRat', 'CreditScore',
@@ -85,8 +84,6 @@ def make_dataset():
                'ATFHP', 'NetSaleProceeds', 'CreditEnhProceeds', 'RPMWP', 'OFP', 'NIBUPB', 'PFUPB', 'RMWPF',
                'FPWA', 'ServicingIndicator']
 
-    linesToRead = 30000
-
     aquisition_frame = pd.read_csv('C:/Users/bebxadvberb/Documents/AI/Trusted AI/Acquisition_2007Q4.txt', sep='|', names=col_acq, nrows= linesToRead)
     performance_frame = pd.read_csv('C:/Users/bebxadvberb/Documents/AI/Trusted AI/Performance_2007Q4.txt', sep='|', names=col_per, index_col=False, nrows = linesToRead)
 
@@ -95,25 +92,27 @@ def make_dataset():
     # Merge the two DF's together using inner join
     df = pd.merge(aquisition_frame, performance_frame, on = 'LoanID', how='inner')
 
+
+    print(df.columns)
     return df
 
 
 
 def model_catboost(df):
 
-    cat_features = ['Channel', 'SellerName', 'FTHomeBuyer', 'LoanPurpose', 'PropertyType', 'OccStatus', 'PropertyState',
-                    'RelMortInd', 'ModFlag']
+    # cat_features = ['Channel', 'SellerName', 'FTHomeBuyer', 'LoanPurpose', 'PropertyType', 'OccStatus', 'PropertyState',
+    #                'RelMortInd', 'ModFlag']
 
-    indices = [df.columns.get_loc(c) for c in cat_features]
-    indicesFull = indices.append(df.columns.size)
-    print(indicesFull)
+    # indices = [df.columns.get_loc(c) for c in cat_features]
+    # indicesFull = indices.append(df.columns.size)
+    # print(indicesFull)
 
-    train_data = df.drop(['ForeclosureDate'], axis=1)
+    train_data = df.drop(['Default'], axis=1)
 
-    train_labels = df[['ForeclosureDate']]
+    train_labels = df[['Default']]
 
-    train_pool = Pool(data=train_data, label=train_labels, cat_features=indicesFull)
-    test_pool = Pool(data=train_data, cat_features=indices)
+    train_pool = Pool(data=train_data, label=train_labels)
+    test_pool = Pool(data=train_data)
 
     model = CatBoostClassifier(iterations=20, 
                             loss_function = "CrossEntropy", 
@@ -122,11 +121,11 @@ def model_catboost(df):
     model.fit(train_pool)
     predictions = model.predict(test_pool)
 
-    res = train_labels.concat(predictions)
-    print(res.head())
+    print(model.score(train_data, train_labels))
+    print(model.eval_metrics(train_pool, ['Logloss', 'AUC']))
 
 
 if __name__ == '__main__':
-    df = make_dataset()
+    df = make_dataset(20000)
     df = build_features(df)
-    # model_catboost(df)
+    model_catboost(df)
